@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 
@@ -87,9 +87,153 @@ class Owner:
 
 
 class Scheduler:
+	def sort_by_time(self, tasks: List[Task]) -> List[Task]:
+		"""Sort tasks by due time, then by pet/task ID for deterministic output.
+
+		This keeps terminal/UI views stable when multiple tasks share the same
+		due time.
+		"""
+		return sorted(tasks, key=lambda task: (task.due_at, task.pet_id, task.task_id))
+
+	def detect_conflicts(self, owners: List[Owner]) -> List[str]:
+		"""Detect overlapping incomplete tasks and return warning messages.
+
+		A conflict is reported when:
+		- A single pet has 2+ tasks at the same exact due time.
+		- Different pets have tasks at the same exact due time.
+
+		The method is intentionally lightweight: it never raises and always returns
+		a list of human-readable warnings.
+		"""
+		tasks_by_due_time: dict[datetime, List[tuple[Pet, Task]]] = {}
+		for owner in owners:
+			for pet in owner.pets:
+				for task in pet.tasks:
+					if task.is_completed:
+						continue
+					tasks_by_due_time.setdefault(task.due_at, []).append((pet, task))
+
+		warnings: List[str] = []
+		for due_at in sorted(tasks_by_due_time.keys()):
+			timed_tasks = tasks_by_due_time[due_at]
+			if len(timed_tasks) < 2:
+				continue
+
+			time_label = due_at.strftime("%Y-%m-%d %H:%M")
+
+			tasks_by_pet: dict[int, List[Task]] = {}
+			pet_names: dict[int, str] = {}
+			for pet, task in timed_tasks:
+				tasks_by_pet.setdefault(pet.pet_id, []).append(task)
+				pet_names[pet.pet_id] = pet.name
+
+			for pet_id, pet_tasks in tasks_by_pet.items():
+				if len(pet_tasks) < 2:
+					continue
+				titles = ", ".join(task.title for task in pet_tasks)
+				warnings.append(
+					f"Warning: {pet_names[pet_id]} has overlapping tasks at {time_label}: {titles}."
+				)
+
+			if len(tasks_by_pet) > 1:
+				summary = ", ".join(
+					f"{pet.name}: {task.title}" for pet, task in timed_tasks
+				)
+				warnings.append(
+					f"Warning: Multiple pets have tasks at {time_label}: {summary}."
+				)
+
+		return warnings
+
+	def _next_due_at_for_recurring_task(self, task: Task) -> Optional[datetime]:
+		"""Compute the next due time for recurring tasks.
+
+		Returns:
+		- task.due_at + 1 day for "daily"
+		- task.due_at + 1 week for "weekly"
+		- None for all other frequencies
+		"""
+		frequency = task.frequency.strip().lower()
+		if frequency == "daily":
+			return task.due_at + timedelta(days=1)
+		if frequency == "weekly":
+			return task.due_at + timedelta(weeks=1)
+		return None
+
+	def _next_task_id(self, pet: Pet) -> int:
+		"""Return the next available task ID for a specific pet."""
+		if not pet.tasks:
+			return 1
+		return max(task.task_id for task in pet.tasks) + 1
+
+	def filter_tasks(
+		self,
+		owners: List[Owner],
+		include_completed: Optional[bool] = None,
+		pet_name: Optional[str] = None,
+	) -> List[Task]:
+		"""Filter tasks by optional completion status and optional pet name.
+
+		Args:
+			owners: Owners to scan for tasks.
+			include_completed: If True, only completed tasks are returned.
+				If False, only pending tasks are returned. If None, no status filter
+				is applied.
+			pet_name: Case-insensitive pet name filter. If None, all pet names are
+				included.
+
+		Returns:
+			A time-sorted list of matching tasks.
+		"""
+		normalized_pet_name = pet_name.strip().lower() if pet_name is not None else None
+
+		filtered_tasks: List[Task] = []
+		for owner in owners:
+			for pet in owner.pets:
+				if normalized_pet_name is not None and pet.name.lower() != normalized_pet_name:
+					continue
+
+				for task in pet.tasks:
+					if include_completed is not None and task.is_completed != include_completed:
+						continue
+					filtered_tasks.append(task)
+
+		return self.sort_by_time(filtered_tasks)
+
 	def schedule(self, pet: Pet, task: Task) -> bool:
 		"""Schedule a task by adding it to the provided pet."""
 		return pet.add_task(task)
+
+	def complete_task(self, pet: Pet, task_id: int) -> bool:
+		"""Complete a task and auto-create the next recurring occurrence.
+
+		Behavior:
+		- Marks the matching task complete.
+		- If frequency is daily/weekly, appends a new pending task with the next
+		  due date.
+		- Returns False when the task is missing or already completed.
+		"""
+		for task in pet.tasks:
+			if task.task_id != task_id:
+				continue
+
+			if task.is_completed:
+				return False
+
+			task.mark_completed()
+			next_due_at = self._next_due_at_for_recurring_task(task)
+			if next_due_at is not None:
+				next_task = Task(
+					task_id=self._next_task_id(pet),
+					pet_id=pet.pet_id,
+					title=task.title,
+					due_at=next_due_at,
+					frequency=task.frequency,
+				)
+				pet.add_task(next_task)
+			return True
+
+		return False
 
 	def cancel(self, pet: Pet, task_id: int) -> bool:
 		"""Cancel and remove a task from a pet by task ID."""
@@ -110,11 +254,11 @@ class Scheduler:
 				if task.due_at <= now:
 					due_tasks.append(task)
 
-		return sorted(due_tasks, key=lambda task: (task.due_at, task.pet_id, task.task_id))
+		return self.sort_by_time(due_tasks)
 
 	def get_all_tasks(self, owners: List[Owner], include_completed: bool = True) -> List[Task]:
 		"""Return all tasks for owners sorted by due time and identifiers."""
 		all_tasks: List[Task] = []
 		for owner in owners:
 			all_tasks.extend(owner.get_all_tasks(include_completed=include_completed))
-		return sorted(all_tasks, key=lambda task: (task.due_at, task.pet_id, task.task_id))
+		return self.sort_by_time(all_tasks)
