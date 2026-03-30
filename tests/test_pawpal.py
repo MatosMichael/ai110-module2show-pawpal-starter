@@ -35,6 +35,26 @@ def test_add_task_increases_pet_task_count() -> None:
 	assert len(pet.tasks) == starting_count + 1
 
 
+def test_get_all_tasks_returns_tasks_in_chronological_order() -> None:
+	owner = Owner(owner_id=1, name="Jordan", email="jordan@example.com")
+	pet = Pet(pet_id=10, name="Mochi", species="dog", age=3)
+	owner.add_pet(pet)
+
+	now = datetime.now().replace(second=0, microsecond=0)
+	late_task = Task(task_id=10, pet_id=10, title="Evening walk", due_at=now + timedelta(hours=3))
+	early_task = Task(task_id=11, pet_id=10, title="Breakfast", due_at=now + timedelta(minutes=30))
+	middle_task = Task(task_id=12, pet_id=10, title="Medication", due_at=now + timedelta(hours=1))
+
+	pet.add_task(late_task)
+	pet.add_task(early_task)
+	pet.add_task(middle_task)
+
+	scheduler = Scheduler()
+	sorted_tasks = scheduler.get_all_tasks([owner])
+
+	assert [task.task_id for task in sorted_tasks] == [11, 12, 10]
+
+
 def test_filter_tasks_by_completion_status() -> None:
 	owner = Owner(owner_id=1, name="Jordan", email="jordan@example.com")
 	pet = Pet(pet_id=10, name="Mochi", species="cat", age=3)
@@ -178,6 +198,22 @@ def test_detect_conflicts_returns_warning_for_same_pet_and_multi_pet_overlap() -
 
 	assert any("Mochi has overlapping tasks" in warning for warning in warnings)
 	assert any("Multiple pets have tasks" in warning for warning in warnings)
+
+
+def test_detect_conflicts_flags_duplicate_task_times_for_same_pet() -> None:
+	owner = Owner(owner_id=3, name="Alex", email="alex@example.com")
+	pet = Pet(pet_id=99, name="Nova", species="dog", age=4)
+	owner.add_pet(pet)
+
+	duplicate_time = datetime.now().replace(second=0, microsecond=0)
+	pet.add_task(Task(task_id=1, pet_id=99, title="Walk", due_at=duplicate_time))
+	pet.add_task(Task(task_id=2, pet_id=99, title="Feed", due_at=duplicate_time))
+
+	scheduler = Scheduler()
+	warnings = scheduler.detect_conflicts([owner])
+
+	assert len(warnings) == 1
+	assert "Nova has overlapping tasks" in warnings[0]
 
 
 def test_detect_conflicts_returns_empty_for_non_overlapping_tasks() -> None:
