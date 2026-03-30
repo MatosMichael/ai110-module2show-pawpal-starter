@@ -1,0 +1,36 @@
+classDiagram
+    class Owner {
+      +ownerId: int
+      +name: string
+      +email: string
+      +addPet(pet: Pet)
+      +removePet(petId: int)
+    }
+
+    class Pet {
+      +petId: int
+      +name: string
+      +species: string
+      +age: int
+      +addTask(task: Task)
+      +completeTask(taskId: int)
+    }
+
+    class Task {
+      +taskId: int
+      +title: string
+      +dueAt: datetime
+      +isCompleted: bool
+      +markCompleted()
+      +reschedule(newDueAt: datetime)
+    }
+
+    class Scheduler {
+      +schedule(task: Task)
+      +cancel(taskId: int)
+      +getDueTasks()
+    }
+
+    Owner "1" --> "0..*" Pet : owns
+    Pet "1" --> "0..*" Task : needs
+    Scheduler ..> Task : schedules

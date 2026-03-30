@@ -1,54 +1,60 @@
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import List, Optional
+
+
+@dataclass
+class Task:
+	task_id: int
+	title: str
+	due_at: datetime
+	is_completed: bool = False
+
+	def mark_completed(self) -> None:
+		pass
+
+	def reschedule(self, new_due_at: datetime) -> None:
+		pass
 
 
 @dataclass
 class Pet:
-    """Represents a pet with name and type."""
-    pet_name: str
-    pet_type: str
-    breed: str = ""
-    
-    def edit_pet(self) -> None:
-        """Edit pet information."""
-        pass
+	pet_id: int
+	name: str
+	species: str
+	age: int
+	tasks: List[Task] = field(default_factory=list)
+
+	def add_task(self, task: Task) -> None:
+		pass
+
+	def complete_task(self, task_id: int) -> None:
+		pass
 
 
 @dataclass
-class FeedingTimes:
-    """Represents a feeding schedule for a pet."""
-    food_type: str
-    time: str
-    
-    def set_time(self) -> None:
-        """Set the feeding time."""
-        pass
-
-
-@dataclass
-class ScheduleWalk:
-    """Represents a walk schedule for a pet."""
-    walk_length: int
-    frequency: int
-    
-    def set_time(self) -> None:
-        """Set the walk time."""
-        pass
-
-
 class Owner:
-    """Represents a pet owner managing their pets."""
-    
-    def __init__(self, owner_name: str, contact: str):
-        """Initialize an owner with name and contact information."""
-        self.owner_name: str = owner_name
-        self.contact: str = contact
-        self.pets: List[Pet] = []
-    
-    def add_pet(self, pet: Pet) -> None:
-        """Add a pet to the owner's collection."""
-        pass
-    
-    def remove_pet(self, pet: Pet) -> None:
-        """Remove a pet from the owner's collection."""
-        pass
+	owner_id: int
+	name: str
+	email: str
+	pets: List[Pet] = field(default_factory=list)
+
+	def add_pet(self, pet: Pet) -> None:
+		pass
+
+	def remove_pet(self, pet_id: int) -> None:
+		pass
+
+
+class Scheduler:
+	def __init__(self) -> None:
+		self.tasks: List[Task] = []
+
+	def schedule(self, task: Task) -> None:
+		pass
+
+	def cancel(self, task_id: int) -> None:
+		pass
+
+	def get_due_tasks(self, now: Optional[datetime] = None) -> List[Task]:
+		pass
