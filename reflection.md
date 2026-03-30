@@ -6,6 +6,18 @@
 
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
+  Three core actions:
+  1.add pet
+  Attributes: pet name, pet type
+  Methods: add pet, edit pet
+
+  2.feeding times
+  Attributes: food type
+  Methods: add time
+
+  3.schedule a walk
+  Attributes: walk length
+  Methods: add time, frequency,
 
 **b. Design changes**
 
